@@ -316,6 +316,43 @@
     font-size: 13px; color: var(--text-secondary); line-height: 1.65;
     padding-left: 26px;
   }
+
+  /* ── CLAUDE EVAL ── */
+  .config-row { display: flex; gap: 8px; margin-bottom: 12px; }
+  .config-row input {
+    flex: 1; padding: 11px 13px; border: 1px solid var(--border);
+    border-radius: var(--radius); font-family: inherit; font-size: 12px; color: var(--text);
+    background: var(--surface); outline: none; transition: border-color 0.2s;
+  }
+  .config-row input:focus { border-color: var(--ua-orange); }
+  .claude-btn {
+    width: 100%; padding: 13px; border-radius: var(--radius);
+    font-size: 13px; font-weight: 700; letter-spacing: 0.8px; text-transform: uppercase;
+    cursor: pointer; border: 1px solid var(--ua-orange); background: #fff; color: var(--ua-orange);
+    font-family: inherit; transition: background 0.15s, color 0.15s; margin-bottom: 8px;
+  }
+  .claude-btn:hover:not(:disabled) { background: var(--ua-orange-dim); }
+  .claude-btn:disabled { border-color: var(--border); color: var(--muted); cursor: not-allowed; }
+  .claude-status { font-size: 12px; min-height: 16px; margin-bottom: 32px; line-height: 1.5; }
+  .claude-status.ok { color: var(--green); }
+  .claude-status.err { color: var(--red); }
+  .claude-total { text-align: center; font-size: 12px; font-weight: 700; color: #3b82f6; margin-top: 10px; }
+
+  .llm-result {
+    margin-bottom: 14px; padding: 12px 14px; border-radius: var(--radius);
+    background: rgba(59,130,246,0.04); border: 1px solid rgba(59,130,246,0.25); display: none;
+  }
+  .llm-result.show { display: block; }
+  .llm-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .llm-chip { font-size: 10px; font-weight: 700; color: #fff; background: #3b82f6; padding: 2px 8px; border-radius: 10px; text-transform: uppercase; letter-spacing: 0.4px; }
+  .llm-score { font-size: 14px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .llm-score.s0 { color: #3a3a3a; } .llm-score.s1 { color: var(--red); } .llm-score.s2 { color: var(--orange); }
+  .llm-score.s3 { color: var(--yellow); } .llm-score.s4 { color: #84cc16; } .llm-score.s5 { color: var(--green); }
+  .llm-use { margin-left: auto; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px;
+    border: 1px solid var(--border); background: #fff; color: var(--text-secondary); padding: 4px 9px;
+    border-radius: 3px; cursor: pointer; font-family: inherit; transition: border-color 0.15s, color 0.15s; }
+  .llm-use:hover { border-color: #3b82f6; color: #3b82f6; }
+  .llm-just { font-size: 12px; color: var(--text-secondary); line-height: 1.6; }
 </style>
 </head>
 <body>
@@ -350,6 +387,14 @@
 
   <button class="analyze-btn" id="analyzeBtn" onclick="analyze()" disabled>Analyze skill</button>
 
+  <!-- CLAUDE EVAL -->
+  <div class="section-label">Évaluation par Claude (optionnel)</div>
+  <div class="config-row">
+    <input type="password" id="apiKey" placeholder="Clé API Anthropic (sk-ant-…) — stockée localement dans ce navigateur" oninput="saveApiKey()" autocomplete="off">
+  </div>
+  <button class="claude-btn" id="claudeBtn" onclick="evaluateWithClaude()" disabled>Évaluer avec Claude (Opus 4.8)</button>
+  <div id="claudeStatus" class="claude-status"></div>
+
   <!-- STATS -->
   <div class="section-label" id="statsLabel" style="display:none">Skill stats</div>
   <div class="stats-bar" id="statsBar" style="display:none">
@@ -374,6 +419,7 @@
       </div>
     </div>
     <div class="chart-wrapper"><canvas id="radarChart"></canvas></div>
+    <div id="claudeTotal" class="claude-total" style="display:none"></div>
     <div id="verdict" class="verdict medium" style="display:none"></div>
     <div class="weaknesses" id="weaknesses" style="display:none">
       <h3>Areas to improve</h3>
@@ -787,6 +833,9 @@ let autoScores = {};
 let notes = {};
 let skillContent = '';
 let chart = null;
+let llmScores = {};
+let llmJustif = {};
+const CLAUDE_MODEL = 'claude-opus-4-8';
 
 function init() {
   const container = document.getElementById('criteria');
@@ -804,6 +853,14 @@ function init() {
         </div>
         <div class="criterion-desc">${c.desc}</div>
         <div class="signals" id="signals-${c.id}"></div>
+        <div class="llm-result" id="llm-${c.id}">
+          <div class="llm-head">
+            <span class="llm-chip">Claude</span>
+            <span class="llm-score s0">—</span>
+            <button class="llm-use" onclick="useClaudeScore('${c.id}')">Utiliser ce score</button>
+          </div>
+          <div class="llm-just"></div>
+        </div>
         <input type="range" min="0" max="5" value="0" step="1" id="slider-${c.id}" oninput="manualScore('${c.id}', this.value)">
         <div class="slider-labels">
           <span>0 — ${c.low}</span>
@@ -813,6 +870,10 @@ function init() {
   });
   initChart();
   updateResults();
+
+  // Restore saved API key
+  document.getElementById('apiKey').value = localStorage.getItem('ua_anthropic_key') || '';
+  updateClaudeBtn();
 
   // File input
   const fi = document.getElementById('fileInput');
@@ -839,6 +900,7 @@ function loadFile(file) {
     document.getElementById('filename').textContent = '✓ ' + file.name;
     document.getElementById('dropZone').classList.add('has-file');
     document.getElementById('analyzeBtn').disabled = false;
+    updateClaudeBtn();
     // Auto-set skill name
     const firstLine = skillContent.split('\n')[0].replace(/^#+\s*/, '').trim();
     if (firstLine) document.getElementById('resultTitle').textContent = firstLine;
@@ -849,6 +911,7 @@ function loadFile(file) {
 function onPaste() {
   skillContent = document.getElementById('pasteArea').value;
   document.getElementById('analyzeBtn').disabled = skillContent.trim().length < 20;
+  updateClaudeBtn();
 }
 
 function analyze() {
@@ -958,14 +1021,24 @@ function initChart() {
     type: 'radar',
     data: {
       labels: CRITERIA.map(c => c.title.split(' ').slice(0, 3).join(' ')),
-      datasets: [{
-        label: 'Score', data: CRITERIA.map(() => 0),
-        backgroundColor: 'rgba(255,75,0,0.1)',
-        borderColor: 'rgba(255,75,0,0.8)',
-        pointBackgroundColor: '#FF4B00',
-        pointHoverBackgroundColor: '#fff',
-        pointRadius: 4, borderWidth: 2
-      }]
+      datasets: [
+        {
+          label: 'Score (auto / manuel)', data: CRITERIA.map(() => 0),
+          backgroundColor: 'rgba(255,75,0,0.1)',
+          borderColor: 'rgba(255,75,0,0.8)',
+          pointBackgroundColor: '#FF4B00',
+          pointHoverBackgroundColor: '#fff',
+          pointRadius: 4, borderWidth: 2
+        },
+        {
+          label: 'Claude', data: CRITERIA.map(() => 0), hidden: true,
+          backgroundColor: 'rgba(59,130,246,0.08)',
+          borderColor: 'rgba(59,130,246,0.8)',
+          pointBackgroundColor: '#3b82f6',
+          pointHoverBackgroundColor: '#fff',
+          pointRadius: 4, borderWidth: 2
+        }
+      ]
     },
     options: {
       responsive: true, maintainAspectRatio: false,
@@ -977,7 +1050,7 @@ function initChart() {
           pointLabels: { color: '#999', font: { size: 11 } }
         }
       },
-      plugins: { legend: { display: false } }
+      plugins: { legend: { display: true, labels: { color: '#999', font: { size: 11 }, boxWidth: 12 } } }
     }
   });
 }
@@ -1018,6 +1091,135 @@ function renderRecommendations() {
   }).join('');
 }
 
+function getApiKey() {
+  return document.getElementById('apiKey').value.trim();
+}
+
+function saveApiKey() {
+  const k = getApiKey();
+  if (k) localStorage.setItem('ua_anthropic_key', k);
+  else localStorage.removeItem('ua_anthropic_key');
+  updateClaudeBtn();
+}
+
+function updateClaudeBtn() {
+  const btn = document.getElementById('claudeBtn');
+  btn.disabled = !(skillContent.trim().length >= 20 && getApiKey().length > 10);
+}
+
+function useClaudeScore(id) {
+  if (llmScores[id] == null) return;
+  document.getElementById(`slider-${id}`).value = llmScores[id];
+  manualScore(id, llmScores[id]);
+}
+
+function applyClaudeScores(evals) {
+  evals.forEach(e => {
+    if (!(e.id in scores)) return;
+    llmScores[e.id] = e.score;
+    llmJustif[e.id] = e.justification || '';
+    const box = document.getElementById(`llm-${e.id}`);
+    if (box) {
+      box.classList.add('show');
+      const sc = box.querySelector('.llm-score');
+      sc.textContent = `${e.score}/5`;
+      sc.className = `llm-score s${e.score}`;
+      box.querySelector('.llm-just').textContent = e.justification || '';
+    }
+  });
+  if (chart) {
+    chart.data.datasets[1].hidden = false;
+    chart.data.datasets[1].data = CRITERIA.map(c => llmScores[c.id] ?? 0);
+    chart.update();
+  }
+  const total = CRITERIA.reduce((a, c) => a + (llmScores[c.id] || 0), 0);
+  const lbl = document.getElementById('claudeTotal');
+  lbl.style.display = 'block';
+  lbl.textContent = `Score Claude : ${total} / 45`;
+}
+
+async function evaluateWithClaude() {
+  const key = getApiKey();
+  if (!key || !skillContent.trim()) return;
+  const btn = document.getElementById('claudeBtn');
+  const status = document.getElementById('claudeStatus');
+  const label = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Claude analyse…';
+  status.textContent = '';
+  status.className = 'claude-status';
+
+  const schema = {
+    type: 'object',
+    properties: {
+      evaluations: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', enum: CRITERIA.map(c => c.id) },
+            score: { type: 'integer', enum: [0, 1, 2, 3, 4, 5] },
+            justification: { type: 'string' }
+          },
+          required: ['id', 'score', 'justification'],
+          additionalProperties: false
+        }
+      }
+    },
+    required: ['evaluations'],
+    additionalProperties: false
+  };
+
+  const rubric = CRITERIA.map((c, i) =>
+    `${i + 1}. [${c.id}] ${c.title} — ${c.desc} (0 = ${c.low} ; 5 = ${c.high})`
+  ).join('\n');
+
+  const prompt =
+    `Tu es un évaluateur expert de "skills" pour agents Claude (fichiers SKILL.md).\n` +
+    `Évalue la skill ci-dessous selon les 9 critères, chacun noté de 0 à 5 (entier).\n` +
+    `Donne pour chaque critère une justification d'une à deux phrases EN FRANÇAIS, ancrée dans le contenu réel de la skill (cite des éléments précis plutôt que des généralités).\n\n` +
+    `CRITÈRES :\n${rubric}\n\n` +
+    `=== DÉBUT SKILL.md ===\n${skillContent}\n=== FIN SKILL.md ===`;
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': key,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: CLAUDE_MODEL,
+        max_tokens: 16000,
+        thinking: { type: 'adaptive' },
+        output_config: { format: { type: 'json_schema', schema } },
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error((err.error && err.error.message) || `Erreur API ${res.status}`);
+    }
+    const data = await res.json();
+    if (data.stop_reason === 'refusal') throw new Error('Requête refusée par le modèle.');
+    const textBlock = (data.content || []).find(b => b.type === 'text' && b.text);
+    if (!textBlock) throw new Error('Réponse vide ou tronquée (augmentez max_tokens).');
+    const parsed = JSON.parse(textBlock.text);
+    applyClaudeScores(parsed.evaluations || []);
+    status.textContent = `✓ Évaluation Claude terminée — modèle ${data.model || CLAUDE_MODEL}.`;
+    status.className = 'claude-status ok';
+  } catch (e) {
+    status.textContent = `✗ ${e.message}`;
+    status.className = 'claude-status err';
+  } finally {
+    btn.textContent = label;
+    btn.disabled = false;
+    updateClaudeBtn();
+  }
+}
+
 function exportReport() {
   const name = document.getElementById('resultTitle').textContent || 'Unnamed skill';
   const total = Object.values(scores).reduce((a, b) => a + b, 0);
@@ -1030,6 +1232,7 @@ function exportReport() {
     // Signals
     const sigs = document.querySelectorAll(`#signals-${c.id} .signal`);
     sigs.forEach(s => { md += `- ${s.textContent.trim()}\n`; });
+    if (llmScores[c.id] != null) md += `- Claude: ${llmScores[c.id]}/5 — ${llmJustif[c.id] || ''}\n`;
     md += '\n';
   });
   const verdict = total >= 36 ? 'Strong skill' : total >= 23 ? 'Needs iteration' : 'Not production-ready';
@@ -1060,6 +1263,20 @@ function resetAll() {
     const tag = titleEl && titleEl.querySelector('.auto-tag');
     if (tag) tag.remove();
   });
+  llmScores = {}; llmJustif = {};
+  CRITERIA.forEach(c => {
+    const box = document.getElementById(`llm-${c.id}`);
+    if (box) {
+      box.classList.remove('show');
+      box.querySelector('.llm-score').textContent = '—';
+      box.querySelector('.llm-score').className = 'llm-score s0';
+      box.querySelector('.llm-just').textContent = '';
+    }
+  });
+  if (chart) { chart.data.datasets[1].data = CRITERIA.map(() => 0); chart.data.datasets[1].hidden = true; chart.update(); }
+  const ct = document.getElementById('claudeTotal'); if (ct) ct.style.display = 'none';
+  document.getElementById('claudeStatus').textContent = '';
+  updateClaudeBtn();
   updateResults();
 }
 
