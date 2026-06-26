@@ -1,0 +1,1069 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UA Skill Evaluator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #f5f5f5;
+    --surface: #ffffff;
+    --surface2: #f0f0f0;
+    --border: #e0e0e0;
+    --ua-orange: #FF4B00;
+    --ua-orange-dim: rgba(255,75,0,0.06);
+    --ua-orange-border: rgba(255,75,0,0.25);
+    --text: #111111;
+    --text-secondary: #444444;
+    --muted: #999;
+    --green: #16a34a;
+    --yellow: #ca8a04;
+    --red: #dc2626;
+    --orange: #ea580c;
+    --radius: 4px;
+  }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 0 0 64px;
+  }
+
+  .container { max-width: 900px; margin: 0 auto; padding: 0 24px; }
+
+  /* ── HEADER UA ── */
+  header {
+    background: #ffffff;
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px;
+    margin-bottom: 40px;
+  }
+
+  .header-inner {
+    max-width: 900px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 64px;
+  }
+
+  .ua-logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .ua-logo img {
+    height: 24px;
+    filter: brightness(0);
+  }
+
+  .ua-logo-divider {
+    width: 1px;
+    height: 20px;
+    background: var(--border);
+  }
+
+  .ua-logo-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+
+  .header-badge {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--ua-orange);
+    background: var(--ua-orange-dim);
+    border: 1px solid var(--ua-orange-border);
+    padding: 4px 10px;
+    border-radius: 20px;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+  }
+
+  .page-title {
+    margin-bottom: 32px;
+  }
+
+  .page-title h1 {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--text);
+    letter-spacing: -0.5px;
+  }
+
+  .page-title p {
+    color: var(--muted);
+    font-size: 13px;
+    margin-top: 6px;
+  }
+
+  /* ── IMPORT ZONE ── */
+  .import-zone {
+    border: 1px dashed #ccc;
+    border-radius: var(--radius);
+    padding: 36px 24px;
+    text-align: center;
+    margin-bottom: 24px;
+    transition: border-color 0.2s, background 0.2s;
+    cursor: pointer;
+    position: relative;
+    background: var(--surface);
+  }
+  .import-zone:hover { border-color: #aaa; }
+  .import-zone.drag-over { border-color: var(--ua-orange); background: var(--ua-orange-dim); }
+  .import-zone.has-file { border-style: solid; border-color: var(--ua-orange); }
+  .import-zone input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+  .import-zone .icon { font-size: 24px; margin-bottom: 10px; opacity: 0.5; }
+  .import-zone .label { font-size: 14px; color: var(--muted); }
+  .import-zone .label strong { color: var(--text); font-weight: 600; }
+  .import-zone .filename { font-size: 13px; color: var(--ua-orange); margin-top: 8px; font-weight: 600; }
+
+  .or-divider {
+    display: flex; align-items: center; gap: 12px;
+    margin-bottom: 16px; color: var(--muted); font-size: 11px;
+    text-transform: uppercase; letter-spacing: 0.6px;
+  }
+  .or-divider::before, .or-divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+  .paste-area {
+    width: 100%; min-height: 320px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 16px 18px;
+    color: var(--text-secondary); font-family: 'JetBrains Mono', 'Courier New', monospace;
+    font-size: 12px; outline: none; resize: vertical;
+    transition: border-color 0.2s; margin-bottom: 16px; line-height: 1.7;
+  }
+  .paste-area:focus { border-color: var(--ua-orange); }
+  .paste-area::placeholder { color: #bbb; }
+
+  .analyze-btn {
+    width: 100%; padding: 13px; border-radius: var(--radius);
+    font-size: 13px; font-weight: 700; letter-spacing: 0.8px; text-transform: uppercase;
+    cursor: pointer; border: none; background: var(--ua-orange); color: #fff;
+    font-family: inherit; transition: background 0.15s; margin-bottom: 36px;
+  }
+  .analyze-btn:hover { background: #e04200; }
+  .analyze-btn:disabled { background: #2a2a2a; color: var(--muted); cursor: not-allowed; }
+
+  /* ── STATS BAR ── */
+  .stats-bar { display: flex; gap: 8px; margin-bottom: 32px; flex-wrap: wrap; }
+  .stat {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 12px 16px; flex: 1; min-width: 90px;
+  }
+  .stat .v { font-size: 22px; font-weight: 700; color: var(--text); }
+  .stat .l { font-size: 10px; color: var(--muted); margin-top: 2px; text-transform: uppercase; letter-spacing: 0.5px; }
+
+  /* ── CRITERIA ── */
+  .criteria { display: flex; flex-direction: column; gap: 2px; margin-bottom: 40px; }
+
+  .criterion {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px 24px;
+    transition: border-left-color 0.2s;
+  }
+
+  .criterion:hover { border-left-color: #444; }
+  .criterion.scored { border-left-color: var(--ua-orange); }
+
+  .criterion-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 8px; }
+  .criterion-meta { flex: 1; }
+  .criterion-number { font-size: 10px; color: var(--muted); font-weight: 600; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 4px; }
+  .criterion-title { font-size: 14px; font-weight: 700; color: var(--text); }
+  .criterion-desc { font-size: 13px; color: var(--muted); line-height: 1.6; margin-bottom: 14px; }
+
+  .score-badge {
+    font-size: 22px; font-weight: 800; min-width: 44px;
+    text-align: center; color: var(--muted); transition: color 0.2s;
+    font-variant-numeric: tabular-nums;
+  }
+  .score-badge.s0 { color: #3a3a3a; }
+  .score-badge.s1 { color: var(--red); }
+  .score-badge.s2 { color: var(--orange); }
+  .score-badge.s3 { color: var(--yellow); }
+  .score-badge.s4 { color: #84cc16; }
+  .score-badge.s5 { color: var(--green); }
+
+  /* Signals */
+  .signals { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 14px; }
+  .signal {
+    font-size: 11px; padding: 2px 9px; border-radius: 2px; font-weight: 500;
+    display: flex; align-items: center; gap: 4px;
+  }
+  .signal.found { background: rgba(34,197,94,0.08); color: var(--green); border: 1px solid rgba(34,197,94,0.2); }
+  .signal.missing { background: rgba(239,68,68,0.08); color: var(--red); border: 1px solid rgba(239,68,68,0.2); }
+  .signal.warn { background: rgba(234,179,8,0.08); color: var(--yellow); border: 1px solid rgba(234,179,8,0.2); }
+
+  input[type="range"] {
+    -webkit-appearance: none; width: 100%; height: 3px;
+    background: var(--border); border-radius: 2px; outline: none; cursor: pointer;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%;
+    background: var(--ua-orange); cursor: pointer; transition: transform 0.15s;
+    box-shadow: 0 0 0 3px rgba(255,75,0,0.15);
+  }
+  input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.25); }
+  .slider-labels { display: flex; justify-content: space-between; margin-top: 5px; font-size: 10px; color: var(--muted); }
+
+  /* ── RESULTS ── */
+  .results {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 28px; margin-bottom: 24px;
+  }
+  .results-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+  .results-header h2 { font-size: 14px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; }
+  .global-score { text-align: center; }
+  .global-score .number { font-size: 52px; font-weight: 800; line-height: 1; letter-spacing: -2px; }
+  .global-score .label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; margin-top: 4px; }
+  .score-green { color: var(--green); }
+  .score-yellow { color: var(--yellow); }
+  .score-red { color: var(--red); }
+  .chart-wrapper { position: relative; height: 300px; margin: 0 auto; max-width: 400px; }
+
+  .verdict { margin-top: 20px; padding: 14px 16px; border-radius: var(--radius); font-size: 13px; line-height: 1.6; }
+  .verdict.good { background: rgba(34,197,94,0.06); border: 1px solid rgba(34,197,94,0.2); }
+  .verdict.medium { background: rgba(234,179,8,0.06); border: 1px solid rgba(234,179,8,0.2); }
+  .verdict.bad { background: rgba(239,68,68,0.06); border: 1px solid rgba(239,68,68,0.2); }
+  .verdict-title { font-weight: 700; margin-bottom: 4px; font-size: 14px; }
+
+  .weaknesses { margin-top: 20px; }
+  .weaknesses h3 { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; }
+  .weakness-item { display: flex; align-items: flex-start; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .weakness-item:last-child { border-bottom: none; }
+  .weakness-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--red); margin-top: 6px; flex-shrink: 0; }
+  .weakness-dot.medium { background: var(--yellow); }
+
+  .actions { display: flex; gap: 8px; margin-bottom: 40px; }
+  button.btn-primary {
+    padding: 10px 20px; border-radius: var(--radius); font-size: 12px; font-weight: 700;
+    letter-spacing: 0.6px; text-transform: uppercase; cursor: pointer; border: none;
+    background: var(--ua-orange); color: #fff; font-family: inherit; transition: background 0.15s;
+  }
+  button.btn-primary:hover { background: #e04200; }
+  button.btn-secondary {
+    padding: 10px 20px; border-radius: var(--radius); font-size: 12px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.6px; cursor: pointer;
+    background: transparent; color: var(--muted); border: 1px solid var(--border);
+    font-family: inherit; transition: border-color 0.15s, color 0.15s;
+  }
+  button.btn-secondary:hover { border-color: #555; color: var(--text); }
+
+  .export-area {
+    background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 16px; font-family: monospace; font-size: 11px; color: var(--muted);
+    white-space: pre-wrap; display: none; margin-top: 12px; max-height: 280px; overflow-y: auto;
+  }
+
+  .auto-tag {
+    font-size: 9px; background: var(--ua-orange-dim); color: var(--ua-orange);
+    padding: 2px 7px; border-radius: 2px; font-weight: 700; margin-left: 8px;
+    vertical-align: middle; text-transform: uppercase; letter-spacing: 0.4px;
+    border: 1px solid var(--ua-orange-border);
+  }
+
+  .section-label {
+    font-size: 10px; font-weight: 700; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 1px;
+    margin-bottom: 12px; margin-top: 36px;
+  }
+
+  /* ── RECOMMENDATIONS ── */
+  #recoList { display: flex; flex-direction: column; gap: 8px; }
+
+  .reco-item {
+    border-radius: var(--radius); padding: 16px 20px;
+    border-left: 3px solid transparent;
+    background: var(--surface);
+    border: 1px solid var(--border);
+  }
+
+  .reco-item.reco-critical { border-left: 3px solid var(--red); background: rgba(220,38,38,0.03); }
+  .reco-item.reco-warning  { border-left: 3px solid var(--yellow); background: rgba(202,138,4,0.03); }
+  .reco-item.reco-improve  { border-left: 3px solid #3b82f6; background: rgba(59,130,246,0.03); }
+  .reco-item.reco-good     { border-left: 3px solid var(--green); background: rgba(22,163,74,0.03); }
+
+  .reco-header {
+    display: flex; align-items: flex-start; gap: 12px; margin-bottom: 8px;
+  }
+
+  .reco-icon { font-size: 14px; margin-top: 1px; flex-shrink: 0; }
+
+  .reco-criterion {
+    font-size: 10px; font-weight: 600; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 2px;
+  }
+
+  .reco-title {
+    font-size: 14px; font-weight: 700; color: var(--text);
+  }
+
+  .reco-body {
+    font-size: 13px; color: var(--text-secondary); line-height: 1.65;
+    padding-left: 26px;
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="header-inner">
+    <div class="ua-logo">
+      <img src="https://www.useradgents.com/_nuxt/img/logo-ua-svg.d6b40cf.svg" alt="UserAdgents" onerror="this.style.display='none';this.nextElementSibling.style.display='none';document.querySelector('.ua-logo-title').style.marginLeft=0">
+      <div class="ua-logo-divider"></div>
+      <span class="ua-logo-title">Skill Evaluator</span>
+    </div>
+    <span class="header-badge">Beta</span>
+  </div>
+</header>
+
+<div class="container">
+  <div class="page-title">
+    <h1>Evaluate a skill.</h1>
+    <p>Import a SKILL.md — automatic analysis + manual override &nbsp;·&nbsp; 9 criteria &nbsp;·&nbsp; 45 pts max</p>
+  </div>
+
+  <!-- IMPORT -->
+  <div class="import-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+    <input type="file" id="fileInput" accept=".md,.txt" style="pointer-events:none">
+    <div class="icon">📄</div>
+    <div class="label">Drop your <strong>SKILL.md</strong> here or click to browse</div>
+    <div class="filename" id="filename"></div>
+  </div>
+
+  <div class="or-divider">or paste content</div>
+
+  <textarea class="paste-area" id="pasteArea" placeholder="# Skill name&#10;&#10;Paste your SKILL.md content here…" oninput="onPaste()"></textarea>
+
+  <button class="analyze-btn" id="analyzeBtn" onclick="analyze()" disabled>Analyze skill</button>
+
+  <!-- STATS -->
+  <div class="section-label" id="statsLabel" style="display:none">Skill stats</div>
+  <div class="stats-bar" id="statsBar" style="display:none">
+    <div class="stat"><div class="v" id="statLines">—</div><div class="l">Lines</div></div>
+    <div class="stat"><div class="v" id="statTokens">~—</div><div class="l">Tokens (est.)</div></div>
+    <div class="stat"><div class="v" id="statH2">—</div><div class="l">Sections (H2)</div></div>
+    <div class="stat"><div class="v" id="statCode">—</div><div class="l">Code blocks</div></div>
+    <div class="stat"><div class="v" id="statWords">—</div><div class="l">Words</div></div>
+  </div>
+
+  <!-- CRITERIA -->
+  <div class="section-label">Criteria</div>
+  <div class="criteria" id="criteria"></div>
+
+  <!-- RESULTS -->
+  <div class="results">
+    <div class="results-header">
+      <h2>Score — <span id="resultTitle">—</span></h2>
+      <div class="global-score">
+        <div class="number" id="globalScore">—</div>
+        <div class="label">/ 45</div>
+      </div>
+    </div>
+    <div class="chart-wrapper"><canvas id="radarChart"></canvas></div>
+    <div id="verdict" class="verdict medium" style="display:none"></div>
+    <div class="weaknesses" id="weaknesses" style="display:none">
+      <h3>Areas to improve</h3>
+      <div id="weaknessList"></div>
+    </div>
+  </div>
+
+  <!-- RECOMMENDATIONS -->
+  <div id="recommendations" style="display:none; margin-bottom:40px;">
+    <div class="section-label">Recommandations</div>
+    <div id="recoList"></div>
+  </div>
+
+  <div class="actions">
+    <button class="btn-primary" onclick="exportReport()">Export report</button>
+    <button class="btn-secondary" onclick="resetAll()">Reset</button>
+  </div>
+  <div class="export-area" id="exportArea"></div>
+</div>
+
+<script>
+const CRITERIA = [
+  {
+    id: "expertise",
+    title: "Grounded in real expertise",
+    desc: "Draws from actual domain knowledge — specific APIs, file paths, tool names, edge cases — not generic LLM training knowledge.",
+    low: "Generic / could apply to anything",
+    high: "Highly specific, project-aware",
+    analyze: (text) => {
+      const signals = [];
+      const lines = text.split('\n');
+      // Specificity signals
+      const hasFilePaths = /[`'"][\w\-\/]+\.\w{2,5}[`'"]/i.test(text);
+      const hasToolNames = /\b(pdfplumber|sfra|coremedia|adyen|threekit|yext|figma|contentful|shopify|stripe)\b/i.test(text);
+      const hasVersions = /v\d+\.\d+|\d+\.\d+\.\d+/.test(text);
+      const hasSchemas = /schema|endpoint|payload|query|mutation|env/i.test(text);
+      const genericPhrases = (text.match(/\b(best practice|handle error|appropriately|follow standard|ensure proper)\b/gi) || []).length;
+      const hasInternalNames = /\b([A-Z][a-z]+[A-Z]\w+|[A-Z]{2,}\w*)\b/.test(text); // camelCase or ALL_CAPS identifiers
+
+      if (hasFilePaths) signals.push({ label: 'File paths referenced', type: 'found' });
+      if (hasToolNames) signals.push({ label: 'Specific tools named', type: 'found' });
+      if (hasVersions) signals.push({ label: 'Version numbers', type: 'found' });
+      if (hasSchemas) signals.push({ label: 'API / schema terms', type: 'found' });
+      if (hasInternalNames) signals.push({ label: 'Internal identifiers', type: 'found' });
+      if (genericPhrases > 2) signals.push({ label: `${genericPhrases} generic phrases detected`, type: 'missing' });
+
+      const score = Math.min(5, [hasFilePaths, hasToolNames, hasVersions, hasSchemas, hasInternalNames].filter(Boolean).length + (genericPhrases <= 1 ? 1 : 0));
+      return { score, signals };
+    }
+  },
+  {
+    id: "tested",
+    title: "Refined with real execution",
+    desc: "Has been run against real tasks. Instructions updated based on what actually happened — corrections, false positives, missed steps.",
+    low: "First draft, untested",
+    high: "Multiple iterations, battle-tested",
+    analyze: (text) => {
+      const signals = [];
+      const hasGotchas = /##\s*gotcha|##\s*caveat|##\s*watch out|##\s*pitfall|##\s*known issue/i.test(text);
+      const hasCorrections = /\b(do not|never|avoid|instead of|rather than|don't)\b/gi.test(text);
+      const hasFallback = /\b(fallback|if.*fail|on error|retry|otherwise)\b/i.test(text);
+      const hasEdgeCases = /\b(edge case|special case|exception|unless|except when|only if)\b/i.test(text);
+      const correctionCount = (text.match(/\b(do not|never|avoid|don't)\b/gi) || []).length;
+
+      if (hasGotchas) signals.push({ label: 'Gotchas section present', type: 'found' });
+      else signals.push({ label: 'No gotchas section', type: 'missing' });
+      if (hasCorrections) signals.push({ label: `${correctionCount} corrections/prohibitions`, type: correctionCount >= 3 ? 'found' : 'warn' });
+      if (hasFallback) signals.push({ label: 'Fallback paths defined', type: 'found' });
+      if (hasEdgeCases) signals.push({ label: 'Edge cases addressed', type: 'found' });
+
+      const score = Math.min(5, [hasGotchas, correctionCount >= 3, hasFallback, hasEdgeCases].filter(Boolean).length + 1);
+      return { score, signals };
+    }
+  },
+  {
+    id: "context",
+    title: "Context efficiency",
+    desc: "Every token earns its place. Adds what agent wouldn't know, omits what it already knows. Under ~500 lines. Progressive disclosure for details.",
+    low: "Verbose, redundant, over-explained",
+    high: "Tight, no filler, right size",
+    analyze: (text) => {
+      const signals = [];
+      const lines = text.split('\n').length;
+      const tokens = Math.round(text.split(/\s+/).length * 1.3);
+      const hasRefs = /references\/|see.*\.md|load.*\.md|read.*\.md/i.test(text);
+      const hasIntro = /^#\s+.+\n\n(pdf|a|the|this skill)/i.test(text);
+      const redundantPhrases = (text.match(/\b(as mentioned|as noted above|as described|note that|please note|it is important)\b/gi) || []).length;
+
+      if (lines <= 300) signals.push({ label: `${lines} lines (great)`, type: 'found' });
+      else if (lines <= 500) signals.push({ label: `${lines} lines (acceptable)`, type: 'warn' });
+      else signals.push({ label: `${lines} lines — exceeds 500 limit`, type: 'missing' });
+
+      if (tokens <= 5000) signals.push({ label: `~${tokens} tokens (within limit)`, type: 'found' });
+      else signals.push({ label: `~${tokens} tokens — exceeds 5000`, type: 'missing' });
+
+      if (hasRefs) signals.push({ label: 'Progressive disclosure (references/)', type: 'found' });
+      if (redundantPhrases > 2) signals.push({ label: `${redundantPhrases} filler phrases`, type: 'missing' });
+
+      const lineScore = lines <= 300 ? 2 : lines <= 500 ? 1 : 0;
+      const score = Math.min(5, lineScore + [tokens <= 5000, hasRefs, redundantPhrases <= 1].filter(Boolean).length + 1);
+      return { score, signals };
+    }
+  },
+  {
+    id: "scope",
+    title: "Coherent scope",
+    desc: "Covers one well-defined unit of work — not too narrow, not so broad it's hard to activate precisely.",
+    low: "Too narrow or too broad",
+    high: "Exactly one coherent responsibility",
+    analyze: (text) => {
+      const signals = [];
+      const h2count = (text.match(/^##\s+/gm) || []).length;
+      const h3count = (text.match(/^###\s+/gm) || []).length;
+      const wordCount = text.split(/\s+/).length;
+      const hasDescription = /^>\s+|description:|## (overview|purpose|when to use)/i.test(text);
+      const triggerWords = (text.match(/\b(trigger|use when|activate|invoke)\b/gi) || []).length;
+
+      if (h2count >= 3 && h2count <= 10) signals.push({ label: `${h2count} sections (well-structured)`, type: 'found' });
+      else if (h2count > 10) signals.push({ label: `${h2count} sections — may be too broad`, type: 'warn' });
+      else signals.push({ label: `${h2count} sections — may be too narrow`, type: 'warn' });
+
+      if (hasDescription) signals.push({ label: 'Purpose/trigger clearly defined', type: 'found' });
+      else signals.push({ label: 'No clear purpose/trigger section', type: 'missing' });
+
+      if (wordCount < 200) signals.push({ label: 'Very short — may be too narrow', type: 'warn' });
+      if (wordCount > 5000) signals.push({ label: 'Very long — may be too broad', type: 'warn' });
+
+      const score = Math.min(5, [h2count >= 3 && h2count <= 10, hasDescription, wordCount >= 200 && wordCount <= 5000, triggerWords > 0].filter(Boolean).length + 1);
+      return { score, signals };
+    }
+  },
+  {
+    id: "control",
+    title: "Calibrated control",
+    desc: "Prescriptiveness matches fragility. Strict sequences for critical ops. Defaults provided, not menus of equal options.",
+    low: "One-size-fits-all rigidity or vagueness",
+    high: "Each step tuned to its risk level",
+    analyze: (text) => {
+      const signals = [];
+      const hasStrict = /\b(exactly|do not modify|run only|must use|required|mandatory)\b/i.test(text);
+      const hasFlexible = /\b(depending on|you can|optionally|if needed|adapt|choose)\b/i.test(text);
+      const hasDefault = /\b(by default|default to|recommended|prefer|use.*instead)\b/i.test(text);
+      const menuCount = (text.match(/you can use ([\w]+,\s*){2,}/gi) || []).length;
+      const hasCodeCommand = /```(bash|sh|shell|python|js)\n.+\n```/s.test(text);
+
+      if (hasStrict) signals.push({ label: 'Strict prescriptions present', type: 'found' });
+      if (hasFlexible) signals.push({ label: 'Flexible guidance present', type: 'found' });
+      if (hasDefault) signals.push({ label: 'Defaults defined', type: 'found' });
+      if (menuCount > 0) signals.push({ label: 'Option menus without defaults', type: 'missing' });
+      if (hasCodeCommand) signals.push({ label: 'Exact commands specified', type: 'found' });
+
+      const score = Math.min(5, [hasStrict, hasFlexible, hasDefault, menuCount === 0, hasCodeCommand].filter(Boolean).length);
+      return { score, signals };
+    }
+  },
+  {
+    id: "procedures",
+    title: "Procedures over declarations",
+    desc: "Teaches an approach that generalizes — how to think through a problem, not what the output looks like for one specific task.",
+    low: "Task-specific answers, not reusable",
+    high: "Generalizable method",
+    analyze: (text) => {
+      const signals = [];
+      const numberedSteps = (text.match(/^\d+\.\s+/gm) || []).length;
+      const hasWorkflow = /##\s*(workflow|process|approach|steps|procedure|how to)/i.test(text);
+      const hasTemplate = /##\s*(template|output format|structure|format)/i.test(text);
+      const specificAnswers = (text.match(/\b(the answer is|result should be|output is)\b/gi) || []).length;
+      const hasReusable = /\b(for any|in general|when.*use this|for each|across)\b/i.test(text);
+
+      if (numberedSteps >= 3) signals.push({ label: `${numberedSteps} numbered steps`, type: 'found' });
+      else signals.push({ label: 'Few numbered steps', type: 'warn' });
+      if (hasWorkflow) signals.push({ label: 'Workflow / process section', type: 'found' });
+      if (hasTemplate) signals.push({ label: 'Output template defined', type: 'found' });
+      if (hasReusable) signals.push({ label: 'Reusable approach signaled', type: 'found' });
+      if (specificAnswers > 2) signals.push({ label: 'Specific answers, not generalizable', type: 'missing' });
+
+      const score = Math.min(5, [numberedSteps >= 3, hasWorkflow, hasTemplate, hasReusable, specificAnswers <= 1].filter(Boolean).length);
+      return { score, signals };
+    }
+  },
+  {
+    id: "external",
+    title: "External system calls",
+    desc: "MCP tools, APIs, web fetches — clearly identified, with selection rationale, error handling, fallbacks, and guidance on when NOT to call.",
+    low: "External calls unnamed, no error handling",
+    high: "Tools named, errors handled, fallbacks defined",
+    analyze: (text) => {
+      const signals = [];
+      const hasMcp = /mcp__|mcp__\w+__\w+/i.test(text);
+      const mcpNames = text.match(/mcp__[\w]+__[\w]+/g) || [];
+      const hasApi = /\b(fetch|requests|axios|http|https:\/\/|endpoint|api key|bearer|authorization)\b/i.test(text);
+      const hasWebSearch = /\b(web.?search|websearch|search_mcp|web.?fetch)\b/i.test(text);
+      const hasToolSearch = /\b(toolsearch|tool.?search|deferred tool)\b/i.test(text);
+      const hasErrorHandling = /\b(non-200|status code|on error|if.*fail|isError|try|catch|error handling|timeout)\b/i.test(text);
+      const hasFallback = /\b(fallback|if.*unavailable|if.*not.*connected|if.*no.*result|otherwise use)\b/i.test(text);
+      const hasWhenNotTo = /\b(do not call|don't call|avoid calling|never call|not for|only call when)\b/i.test(text);
+      const hasRateLimit = /\b(rate limit|pagination|throttl|max.*result|limit.*result)\b/i.test(text);
+      const hasToolRationale = /\b(use.*instead of|prefer.*over|rather than.*use|why.*this tool)\b/i.test(text);
+      const hasAuth = /\b(api.?key|token|bearer|oauth|authenticate|credential)\b/i.test(text);
+
+      if (hasMcp) signals.push({ label: `MCP tools referenced (${mcpNames.length} found)`, type: 'found' });
+      else signals.push({ label: 'No MCP tool references', type: 'warn' });
+
+      if (hasApi) signals.push({ label: 'API / HTTP calls present', type: 'found' });
+      if (hasWebSearch) signals.push({ label: 'Web search tool referenced', type: 'found' });
+      if (hasToolSearch) signals.push({ label: 'ToolSearch / deferred tools handled', type: 'found' });
+
+      if (hasErrorHandling) signals.push({ label: 'Error handling defined', type: 'found' });
+      else signals.push({ label: 'No error handling for external calls', type: 'missing' });
+
+      if (hasFallback) signals.push({ label: 'Fallback strategy defined', type: 'found' });
+      else signals.push({ label: 'No fallback when tool unavailable', type: 'missing' });
+
+      if (hasWhenNotTo) signals.push({ label: 'Conditions for NOT calling defined', type: 'found' });
+      if (hasRateLimit) signals.push({ label: 'Rate limits / pagination handled', type: 'found' });
+      if (hasToolRationale) signals.push({ label: 'Tool selection rationale provided', type: 'found' });
+      if (hasAuth) signals.push({ label: 'Auth / credentials addressed', type: 'found' });
+
+      const hasAnyExternal = hasMcp || hasApi || hasWebSearch;
+      if (!hasAnyExternal) {
+        // Skill may not need external calls
+        signals.push({ label: 'No external calls detected — score manually if intentional', type: 'warn' });
+        return { score: 3, signals };
+      }
+
+      const score = Math.min(5, [
+        hasMcp || hasApi,
+        hasErrorHandling,
+        hasFallback,
+        hasWhenNotTo,
+        hasToolRationale || hasRateLimit || hasAuth
+      ].filter(Boolean).length);
+      return { score, signals };
+    }
+  },
+  {
+    id: "security",
+    title: "Security & trust boundaries",
+    desc: "No hardcoded secrets, prompt injection guards for external content, confirmation before destructive ops, PII not exposed in outputs, least privilege on scopes.",
+    low: "No security awareness, secrets or destructive ops unguarded",
+    high: "Secrets, injection, PII, and destructive ops all handled",
+    analyze: (text) => {
+      const signals = [];
+
+      // Hardcoded secrets detection (bad)
+      const secretPatterns = /[`"'](sk-[a-zA-Z0-9]{20,}|eyJ[a-zA-Z0-9]+|ghp_[a-zA-Z0-9]+|xoxb-[a-zA-Z0-9-]+|AIza[a-zA-Z0-9-_]+)[`"']/;
+      const hasHardcodedSecret = secretPatterns.test(text);
+      const hasApiKeyLiteral = /api[_-]?key\s*[=:]\s*["'][^"']{8,}["']/i.test(text);
+
+      // Env vars / secret references (good)
+      const hasEnvRef = /process\.env|os\.environ|\$\{?\w+_KEY|\$\{?\w+_TOKEN|\$\{?\w+_SECRET|secrets?\.|vault|keychain/i.test(text);
+
+      // Prompt injection guard
+      const hasInjectionGuard = /\b(treat as data|do not (follow|execute|run) instructions|untrusted content|external content|user.provided|prompt injection|embedded instructions)\b/i.test(text);
+
+      // Destructive ops confirmation
+      const hasDestructiveOps = /\b(delete|remove|drop|destroy|send|publish|deploy|overwrite|truncate|reset)\b/i.test(text);
+      const hasConfirmation = /\b(confirm(ation)?|ask.*user|require.*approval|user.*approv|before.*execut|irreversible|cannot be undone)\b/i.test(text);
+
+      // PII / data exposure
+      const hasPiiGuard = /\b(redact|mask|do not (log|expose|return|include).*PII|personal data|sensitive data|never output|strip.*credential)\b/i.test(text);
+
+      // Least privilege
+      const hasLeastPrivilege = /\b(read.?only|minimum (scope|permission|access)|only request|least privilege|no write)\b/i.test(text);
+
+      // Input validation
+      const hasInputValidation = /\b(validat(e|ion) input|sanitiz|check format|verify.*input|assert.*type|schema validat)\b/i.test(text);
+
+      // Trust boundary
+      const hasTrustBoundary = /\b(trust(ed)?|untrust(ed)?|boundary|external source|third.party content)\b/i.test(text);
+
+      if (hasHardcodedSecret || hasApiKeyLiteral) signals.push({ label: 'Hardcoded secret detected — CRITICAL', type: 'missing' });
+      else signals.push({ label: 'No hardcoded secrets detected', type: 'found' });
+
+      if (hasEnvRef) signals.push({ label: 'Env vars / secret manager referenced', type: 'found' });
+      else if (!hasHardcodedSecret) signals.push({ label: 'No secret management pattern', type: 'warn' });
+
+      if (hasInjectionGuard) signals.push({ label: 'Prompt injection guard present', type: 'found' });
+      else signals.push({ label: 'No prompt injection guard', type: 'missing' });
+
+      if (hasDestructiveOps && hasConfirmation) signals.push({ label: 'Destructive ops require confirmation', type: 'found' });
+      else if (hasDestructiveOps && !hasConfirmation) signals.push({ label: 'Destructive ops without confirmation gate', type: 'missing' });
+
+      if (hasPiiGuard) signals.push({ label: 'PII / sensitive data protected', type: 'found' });
+      else signals.push({ label: 'No PII / output exposure guard', type: 'warn' });
+
+      if (hasLeastPrivilege) signals.push({ label: 'Least privilege principle applied', type: 'found' });
+      if (hasInputValidation) signals.push({ label: 'Input validation defined', type: 'found' });
+      if (hasTrustBoundary) signals.push({ label: 'Trust boundaries explicit', type: 'found' });
+
+      const criticalFail = hasHardcodedSecret || hasApiKeyLiteral;
+      if (criticalFail) return { score: 0, signals };
+
+      const score = Math.min(5, [
+        !hasHardcodedSecret,
+        hasEnvRef || !text.includes('key'),
+        hasInjectionGuard,
+        !hasDestructiveOps || hasConfirmation,
+        hasPiiGuard || hasLeastPrivilege || hasInputValidation
+      ].filter(Boolean).length);
+      return { score, signals };
+    }
+  },
+  {
+    id: "structure",
+    title: "Structure quality",
+    desc: "Uses effective patterns: gotchas section, output templates, checklists for multi-step flows, validation loops, plan-validate-execute.",
+    low: "Flat prose, no structure",
+    high: "Gotchas, templates, checklists in place",
+    analyze: (text) => {
+      const signals = [];
+      const hasGotchas = /##\s*gotcha/i.test(text);
+      const hasChecklist = /- \[[ x]\]/.test(text);
+      const hasTemplate = /```markdown|## template|## output/i.test(text);
+      const hasValidation = /##\s*(validat|verif|check)/i.test(text);
+      const hasPlanExecute = /\b(plan.*then.*execut|verif.*before|validat.*before)\b/i.test(text);
+      const codeBlocks = (text.match(/```/g) || []).length / 2;
+      const bulletCount = (text.match(/^[-*]\s+/gm) || []).length;
+
+      if (hasGotchas) signals.push({ label: 'Gotchas section', type: 'found' });
+      else signals.push({ label: 'No gotchas section', type: 'missing' });
+      if (hasChecklist) signals.push({ label: 'Checklist (- [ ])', type: 'found' });
+      if (hasTemplate) signals.push({ label: 'Output template', type: 'found' });
+      if (hasValidation) signals.push({ label: 'Validation loop', type: 'found' });
+      if (hasPlanExecute) signals.push({ label: 'Plan-validate-execute pattern', type: 'found' });
+      if (codeBlocks >= 1) signals.push({ label: `${Math.floor(codeBlocks)} code block(s)`, type: 'found' });
+
+      const score = Math.min(5, [hasGotchas, hasChecklist, hasTemplate, hasValidation, hasPlanExecute, codeBlocks >= 1].filter(Boolean).length);
+      return { score, signals };
+    }
+  }
+];
+
+const RECOMMENDATIONS = {
+  expertise: {
+    0: { title: "Ancrage dans l'expertise réelle", body: "La skill est trop générique. Commencez par réaliser la tâche manuellement en conversation avec l'agent, puis extrayez le pattern réutilisable. Identifiez les noms d'outils spécifiques, les chemins de fichiers, les APIs appelées, les conventions internes — et intégrez-les directement dans les instructions." },
+    1: { title: "Ancrage dans l'expertise réelle", body: "Peu de spécificité détectée. Ajoutez des noms d'outils précis, des chemins de fichiers réels, des patterns d'API internes. Évitez les formulations génériques comme « gérer les erreurs correctement » — préférez « si l'API renvoie un statut non-200, vérifiez le champ errorCode »." },
+    2: { title: "Renforcer la spécificité", body: "Quelques éléments spécifiques sont présents mais insuffisants. Enrichissez avec des exemples concrets tirés de vrais projets : schémas réels, noms de variables internes, comportements observés en production." },
+    3: { title: "Bon niveau, à compléter", body: "Le niveau de spécificité est correct. Pour progresser, identifiez les sections encore génériques et remplacez-les par des références à des cas réels : incidents résolus, patterns observés, noms de composants internes." },
+    4: { title: "Très bonne spécificité", body: "La skill est bien ancrée dans l'expertise réelle. Vérifiez que les références (noms de fichiers, APIs) sont toujours à jour à chaque évolution du projet." },
+    5: { title: "Expertise parfaitement ancrée ✓", body: "La skill reflète une connaissance fine du domaine. Assurez-vous de la mettre à jour à chaque changement de stack ou d'organisation." }
+  },
+  tested: {
+    0: { title: "Aucun signe d'itération", body: "La skill semble être un premier jet non testé. Lancez-la sur 3 à 5 tâches réelles, lisez les traces d'exécution (pas seulement les outputs), et notez chaque fois que l'agent hésite, se trompe ou doit corriger. Ajoutez ensuite une section « Gotchas » avec ces observations." },
+    1: { title: "Ajouter une section Gotchas", body: "Aucune section de cas problématiques détectée. Créez une section `## Gotchas` avec les pièges non-évidents : comportements contre-intuitifs, variables mal nommées, APIs qui retournent 200 même en erreur, etc." },
+    2: { title: "Enrichir avec les cas terrain", body: "Quelques corrections sont présentes mais la skill manque de profondeur terrain. Après chaque exécution qui nécessite une correction manuelle, ajoutez le cas dans les Gotchas. C'est la source la plus fiable d'amélioration." },
+    3: { title: "Itérer sur les cas limites", body: "La skill a été testée mais peut encore progresser. Définissez explicitement les chemins d'erreur, les cas limites (données vides, timeouts, formats inattendus) et les stratégies de récupération." },
+    4: { title: "Bonne maturité d'exécution", body: "La skill montre des signes clairs d'itération terrain. Continuez à alimenter les Gotchas à chaque nouvelle surprise en production." },
+    5: { title: "Skill battle-tested ✓", body: "Excellent niveau d'itération. Planifiez une revue régulière pour vérifier que les Gotchas restent d'actualité à mesure que l'environnement évolue." }
+  },
+  context: {
+    0: { title: "Réduire drastiquement le volume", body: "La skill est probablement trop volumineuse. Tout ce que l'agent sait déjà (définitions générales, concepts publics) doit être supprimé. Ne conservez que ce qu'il ne pourrait pas déduire seul. Déplacez les références détaillées dans un dossier `references/` et chargez-les conditionnellement." },
+    1: { title: "Alléger et restructurer", body: "La skill dépasse les seuils recommandés (500 lignes / 5 000 tokens). Auditez chaque section : supprimez les explications que l'agent connaît déjà, regroupez les détails dans `references/`, et ne laissez dans SKILL.md que les instructions essentielles à chaque run." },
+    2: { title: "Optimiser la densité", body: "Des sections redondantes ou trop explicatives sont probablement présentes. Relisez chaque paragraphe en vous demandant : « L'agent obtiendrait-il un mauvais résultat sans cette instruction ? » Si non, supprimez." },
+    3: { title: "Affiner la structure progressive", body: "Le volume est acceptable mais peut encore être optimisé. Vérifiez si certains détails (listes d'erreurs, schémas complets, templates longs) ne seraient pas mieux placés dans `references/` avec une instruction de chargement conditionnelle." },
+    4: { title: "Bonne efficacité contextuelle", body: "La skill est bien dimensionnée. Surveillez la dérive au fil des ajouts — fixez-vous un seuil de relecture à 400 lignes." },
+    5: { title: "Contexte parfaitement maîtrisé ✓", body: "Excellente densité. Chaque token est justifié. Maintenez cette discipline lors des futures itérations." }
+  },
+  scope: {
+    0: { title: "Redéfinir le périmètre", body: "Le périmètre de la skill est mal défini. Posez-vous la question : quelle est l'unité de travail que cette skill encapsule ? Elle doit répondre à une seule classe de problèmes. Si elle couvre trop de cas, découpez-la. Si elle est trop étroite, fusionnez-la avec une skill adjacente." },
+    1: { title: "Clarifier le déclencheur", body: "Aucune section de déclenchement (« Quand utiliser cette skill ») n'est détectée. Ajoutez une description claire du cas d'usage, des conditions d'activation et des cas qui ne relèvent PAS de cette skill." },
+    2: { title: "Délimiter explicitement le scope", body: "Le périmètre manque de clarté. Ajoutez en début de skill une section indiquant précisément ce qui est inclus, ce qui est exclu, et quand utiliser une autre skill à la place." },
+    3: { title: "Affiner les frontières", body: "Le périmètre est globalement cohérent. Ajoutez des exemples concrets de ce que la skill ne doit PAS traiter pour éviter les activations intempestives." },
+    4: { title: "Scope bien défini", body: "Le périmètre est clair et cohérent. Vérifiez que la description de la skill (dans le frontmatter ou l'en-tête) reflète fidèlement ce périmètre pour garantir un bon déclenchement." },
+    5: { title: "Périmètre parfaitement calibré ✓", body: "La skill couvre exactement une unité de travail cohérente. Maintenez cette discipline lors des extensions futures." }
+  },
+  control: {
+    0: { title: "Calibrer la prescriptivité", body: "Les instructions sont soit trop rigides (même niveau pour toutes les étapes) soit trop vagues. Identifiez les opérations critiques (destructives, irréversibles, sensibles) et soyez prescriptif uniquement sur celles-là. Pour les choix ouverts, expliquez le pourquoi plutôt que d'imposer le comment." },
+    1: { title: "Distinguer opérations critiques et flexibles", body: "Toutes les instructions semblent au même niveau de prescriptivité. Séparez clairement : (1) les séquences exactes à suivre sans modification pour les opérations risquées, (2) les lignes directrices flexibles pour les tâches où plusieurs approches fonctionnent." },
+    2: { title: "Ajouter des défauts clairs", body: "Des menus d'options sont présents sans recommandation claire. Remplacez « vous pouvez utiliser X, Y ou Z » par « utilisez X par défaut ; si [condition spécifique], utilisez Y à la place »." },
+    3: { title: "Affiner la granularité", body: "La calibration est correcte mais peut être plus fine. Pour chaque instruction, demandez-vous : « Est-ce que l'agent doit absolument suivre cette séquence exacte, ou peut-il adapter ? » Rendez le niveau de contrainte explicite." },
+    4: { title: "Bonne calibration", body: "Les niveaux de prescriptivité sont bien différenciés. Assurez-vous que les instructions strictes incluent une explication du risque associé (« Ne modifiez pas ce paramètre — cela déclenche une suppression irréversible »)." },
+    5: { title: "Calibration parfaite ✓", body: "Chaque instruction a le bon niveau de contrainte. Continuez à documenter le « pourquoi » des prescriptions strictes pour aider à la maintenance." }
+  },
+  procedures: {
+    0: { title: "Passer d'une réponse à une méthode", body: "La skill semble donner des réponses spécifiques plutôt qu'enseigner une approche réutilisable. Reformulez chaque instruction en procédure générale : « Pour toute requête analytique, commencez par lire le schéma dans references/schema.yaml, puis… » plutôt que « Joignez la table orders à customers »." },
+    1: { title: "Structurer en étapes numérotées", body: "Aucun workflow clair n'est détecté. Structurez les instructions principales en étapes numérotées qui forment une procédure réutilisable. L'agent doit pouvoir appliquer cette méthode à n'importe quelle instance du problème." },
+    2: { title: "Généraliser les instructions", body: "Certaines instructions sont trop spécifiques à un cas particulier. Reformulez-les pour qu'elles s'appliquent à la classe entière de problèmes. Ajoutez des exemples pour illustrer l'application de la procédure à différents contextes." },
+    3: { title: "Ajouter un template d'output", body: "La procédure est présente mais le format de sortie n'est pas défini. Ajoutez un template d'output concret — l'agent pattern-matche bien mieux contre une structure concrète qu'une description en prose." },
+    4: { title: "Procédure bien structurée", body: "L'approche est généralizable et bien documentée. Vérifiez que les étapes couvrent aussi les cas d'erreur et les chemins alternatifs, pas seulement le happy path." },
+    5: { title: "Procédure exemplaire ✓", body: "La skill enseigne une méthode réutilisable et bien structurée. Assurez-vous que les templates d'output restent à jour avec les évolutions du format attendu." }
+  },
+  external: {
+    0: { title: "Documenter les appels externes", body: "Si la skill fait des appels à des outils MCP, APIs ou services web, ceux-ci doivent être explicitement nommés. Précisez : quel outil appeler, dans quelle condition, comment interpréter la réponse, et que faire si l'appel échoue." },
+    1: { title: "Nommer les outils et définir les fallbacks", body: "Des appels externes semblent présents mais ne sont pas suffisamment documentés. Pour chaque outil MCP ou API : nommez-le explicitement (`mcp__nom__action`), définissez la condition d'appel, et ajoutez un fallback si l'outil est indisponible." },
+    2: { title: "Ajouter la gestion d'erreurs", body: "Les outils externes sont référencés mais la gestion d'erreurs est absente ou insuffisante. Ajoutez pour chaque appel : le comportement attendu en cas d'erreur (non-200, timeout, isError), le fallback et la stratégie de retry si pertinente." },
+    3: { title: "Justifier le choix des outils", body: "Les outils sont nommés mais sans rationale de sélection. Ajoutez une courte explication sur pourquoi cet outil spécifique est utilisé plutôt qu'un autre, et dans quelles conditions une alternative serait préférable." },
+    4: { title: "Bonne documentation des appels externes", body: "Les appels externes sont bien documentés. Vérifiez que les conditions de non-appel (« n'appelez pas cet outil si… ») sont également explicitées pour éviter les appels inutiles ou coûteux." },
+    5: { title: "Appels externes parfaitement documentés ✓", body: "Excellente documentation des intégrations externes. Maintenez cette rigueur lors de l'ajout de nouveaux outils MCP ou APIs." }
+  },
+  security: {
+    0: { title: "⚠ Problème de sécurité critique", body: "Un secret hardcodé a été détecté dans le contenu de la skill. Supprimez-le immédiatement et remplacez-le par une référence à une variable d'environnement ou un gestionnaire de secrets. Ne versionnez jamais de credentials dans un SKILL.md." },
+    1: { title: "Renforcer la sécurité", body: "Les mécanismes de sécurité de base sont absents. Ajoutez : (1) des références aux variables d'environnement pour les credentials, (2) une garde contre l'injection de prompt si la skill traite du contenu externe, (3) une confirmation avant toute opération destructive." },
+    2: { title: "Compléter les gardes de sécurité", body: "Des éléments de sécurité sont présents mais incomplets. Vérifiez que les trois risques principaux sont couverts : exposition de secrets, injection de prompt via contenu externe, opérations irréversibles sans confirmation." },
+    3: { title: "Ajouter les frontières de confiance", body: "La sécurité de base est en place. Ajoutez une section explicitant quelles sources de données sont considérées comme fiables, et comment traiter le contenu potentiellement malveillant (emails, pages web, documents uploadés)." },
+    4: { title: "Bonne posture de sécurité", body: "Les principaux risques sont couverts. Effectuez une revue des données de sortie : est-ce que la skill pourrait involontairement exposer des informations sensibles dans ses outputs ou logs ?" },
+    5: { title: "Sécurité bien maîtrisée ✓", body: "La skill intègre les bonnes pratiques de sécurité. Planifiez une revue périodique lors des changements d'intégrations externes ou d'évolution du périmètre de données manipulées." }
+  },
+  structure: {
+    0: { title: "Structurer avec des patterns éprouvés", body: "La skill est en prose plate sans structure fonctionnelle. Introduisez immédiatement : (1) une section `## Gotchas` pour les pièges non-évidents, (2) des étapes numérotées pour les workflows multi-étapes, (3) des blocs de code pour les commandes exactes à exécuter." },
+    1: { title: "Ajouter les structures de base", body: "La structure est minimale. Priorité : ajoutez une section Gotchas (les pièges que l'agent rencontrera forcément), puis un template d'output si la skill produit un livrable formaté." },
+    2: { title: "Enrichir la structure", body: "Quelques éléments de structure sont présents. Ajoutez selon vos besoins : checklist `- [ ]` pour les workflows multi-étapes, boucle de validation (faire → vérifier → corriger → recommencer), pattern plan-valider-exécuter pour les opérations risquées." },
+    3: { title: "Compléter avec un template d'output", body: "La structure est correcte. Si la skill produit un livrable formaté (rapport, ticket, document), ajoutez un template concret — l'agent s'y conformera bien plus fidèlement qu'à une description en prose." },
+    4: { title: "Bonne structure", body: "La skill est bien structurée avec les patterns appropriés. Vérifiez que les checklists et boucles de validation couvrent aussi les chemins d'erreur, pas seulement le happy path." },
+    5: { title: "Structure exemplaire ✓", body: "Tous les patterns structurels pertinents sont en place. Maintenez la cohérence lors des ajouts futurs en suivant les mêmes conventions." }
+  }
+};
+
+let scores = {};
+let autoScores = {};
+let notes = {};
+let skillContent = '';
+let chart = null;
+
+function init() {
+  const container = document.getElementById('criteria');
+  CRITERIA.forEach((c, i) => {
+    scores[c.id] = 0;
+    notes[c.id] = '';
+    container.innerHTML += `
+      <div class="criterion" id="card-${c.id}">
+        <div class="criterion-header">
+          <div class="criterion-meta">
+            <div class="criterion-number">Criterion ${i + 1} / 7</div>
+            <div class="criterion-title">${c.title}</div>
+          </div>
+          <div class="score-badge s0" id="badge-${c.id}">0</div>
+        </div>
+        <div class="criterion-desc">${c.desc}</div>
+        <div class="signals" id="signals-${c.id}"></div>
+        <input type="range" min="0" max="5" value="0" step="1" id="slider-${c.id}" oninput="manualScore('${c.id}', this.value)">
+        <div class="slider-labels">
+          <span>0 — ${c.low}</span>
+          <span>${c.high} — 5</span>
+        </div>
+      </div>`;
+  });
+  initChart();
+  updateResults();
+
+  // File input
+  const fi = document.getElementById('fileInput');
+  fi.addEventListener('change', e => {
+    if (e.target.files[0]) loadFile(e.target.files[0]);
+  });
+
+  // Drag & drop
+  const dz = document.getElementById('dropZone');
+  dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag-over'); });
+  dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
+  dz.addEventListener('drop', e => {
+    e.preventDefault(); dz.classList.remove('drag-over');
+    const f = e.dataTransfer.files[0];
+    if (f) loadFile(f);
+  });
+}
+
+function loadFile(file) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    skillContent = e.target.result;
+    document.getElementById('pasteArea').value = skillContent;
+    document.getElementById('filename').textContent = '✓ ' + file.name;
+    document.getElementById('dropZone').classList.add('has-file');
+    document.getElementById('analyzeBtn').disabled = false;
+    // Auto-set skill name
+    const firstLine = skillContent.split('\n')[0].replace(/^#+\s*/, '').trim();
+    if (firstLine) document.getElementById('resultTitle').textContent = firstLine;
+  };
+  reader.readAsText(file);
+}
+
+function onPaste() {
+  skillContent = document.getElementById('pasteArea').value;
+  document.getElementById('analyzeBtn').disabled = skillContent.trim().length < 20;
+}
+
+function analyze() {
+  if (!skillContent.trim()) return;
+  const text = skillContent;
+
+  // Stats
+  const lines = text.split('\n').length;
+  const tokens = Math.round(text.split(/\s+/).length * 1.3);
+  const h2count = (text.match(/^##\s+/gm) || []).length;
+  const codeBlocks = Math.floor((text.match(/```/g) || []).length / 2);
+  const words = text.split(/\s+/).length;
+
+  document.getElementById('statLines').textContent = lines;
+  document.getElementById('statTokens').textContent = '~' + tokens;
+  document.getElementById('statH2').textContent = h2count;
+  document.getElementById('statCode').textContent = codeBlocks;
+  document.getElementById('statWords').textContent = words;
+  document.getElementById('statsBar').style.display = 'flex';
+  document.getElementById('statsLabel').style.display = 'block';
+
+  // Per-criterion analysis
+  CRITERIA.forEach(c => {
+    const { score, signals } = c.analyze(text);
+    autoScores[c.id] = score;
+    scores[c.id] = score;
+
+    // Update slider
+    const slider = document.getElementById(`slider-${c.id}`);
+    slider.value = score;
+
+    // Update badge
+    const badge = document.getElementById(`badge-${c.id}`);
+    badge.textContent = score;
+    badge.className = `score-badge s${score}`;
+
+    // Render signals
+    const sigEl = document.getElementById(`signals-${c.id}`);
+    sigEl.innerHTML = signals.map(s => `<span class="signal ${s.type}">${s.type === 'found' ? '✓' : s.type === 'warn' ? '⚠' : '✗'} ${s.label}</span>`).join('');
+
+    // Add auto tag to title
+    const titleEl = document.querySelector(`#card-${c.id} .criterion-title`);
+    if (!titleEl.querySelector('.auto-tag')) {
+      titleEl.innerHTML += `<span class="auto-tag">Auto</span>`;
+    }
+  });
+
+  // Skill name from H1
+  const h1 = text.match(/^#\s+(.+)/m);
+  if (h1) document.getElementById('resultTitle').textContent = h1[1].trim();
+
+  updateResults();
+}
+
+function manualScore(id, val) {
+  scores[id] = parseInt(val);
+  const badge = document.getElementById(`badge-${id}`);
+  badge.textContent = val;
+  badge.className = `score-badge s${val}`;
+  const card = document.getElementById(`card-${id}`);
+  if (parseInt(val) > 0) card.classList.add('scored');
+  else card.classList.remove('scored');
+
+  // Mark as manually overridden
+  const titleEl = document.querySelector(`#card-${id} .criterion-title`);
+  const tag = titleEl.querySelector('.auto-tag');
+  if (tag) tag.textContent = 'Manual';
+
+  updateResults();
+}
+
+function updateResults() {
+  const total = Object.values(scores).reduce((a, b) => a + b, 0);
+  const el = document.getElementById('globalScore');
+  el.textContent = total;
+  el.className = 'number ' + (total >= 36 ? 'score-green' : total >= 23 ? 'score-yellow' : 'score-red');
+
+  if (chart) { chart.data.datasets[0].data = CRITERIA.map(c => scores[c.id]); chart.update(); }
+
+  const verdictEl = document.getElementById('verdict');
+  verdictEl.style.display = 'block';
+  if (total >= 36) {
+    verdictEl.className = 'verdict good';
+    verdictEl.innerHTML = `<div class="verdict-title">Strong skill</div>Well-grounded, efficient, and production-ready. Minor refinements may still improve specific areas.`;
+  } else if (total >= 23) {
+    verdictEl.className = 'verdict medium';
+    verdictEl.innerHTML = `<div class="verdict-title">Needs iteration</div>Solid foundations but gaps that will show up in real execution. Focus on the lowest-scoring criteria first.`;
+  } else {
+    verdictEl.className = 'verdict bad';
+    verdictEl.innerHTML = `<div class="verdict-title">Not production-ready</div>Needs significant work. Start from a real task or internal artifact, run it, then iterate based on actual execution traces.`;
+  }
+
+  const weak = CRITERIA.filter(c => scores[c.id] <= 2 && scores[c.id] > 0);
+  const weakEl = document.getElementById('weaknesses');
+  const listEl = document.getElementById('weaknessList');
+  if (weak.length > 0) {
+    weakEl.style.display = 'block';
+    listEl.innerHTML = weak.map(c => `<div class="weakness-item"><div class="weakness-dot ${scores[c.id] === 2 ? 'medium' : ''}"></div><div><strong>${c.title}</strong> (${scores[c.id]}/5)</div></div>`).join('');
+  } else { weakEl.style.display = 'none'; }
+
+  renderRecommendations();
+}
+
+function initChart() {
+  const ctx = document.getElementById('radarChart').getContext('2d');
+  chart = new Chart(ctx, {
+    type: 'radar',
+    data: {
+      labels: CRITERIA.map(c => c.title.split(' ').slice(0, 3).join(' ')),
+      datasets: [{
+        label: 'Score', data: CRITERIA.map(() => 0),
+        backgroundColor: 'rgba(255,75,0,0.1)',
+        borderColor: 'rgba(255,75,0,0.8)',
+        pointBackgroundColor: '#FF4B00',
+        pointHoverBackgroundColor: '#fff',
+        pointRadius: 4, borderWidth: 2
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      scales: {
+        r: {
+          min: 0, max: 5,
+          ticks: { stepSize: 1, color: '#bbb', font: { size: 10 }, backdropColor: 'transparent' },
+          grid: { color: '#e8e8e8' }, angleLines: { color: '#e8e8e8' },
+          pointLabels: { color: '#999', font: { size: 11 } }
+        }
+      },
+      plugins: { legend: { display: false } }
+    }
+  });
+}
+
+function renderRecommendations() {
+  const recoEl = document.getElementById('recommendations');
+  const recoList = document.getElementById('recoList');
+  const anyAnalyzed = Object.values(autoScores).some(v => v !== undefined);
+  if (!anyAnalyzed) { recoEl.style.display = 'none'; return; }
+
+  recoEl.style.display = 'block';
+
+  const items = CRITERIA.map(c => {
+    const s = scores[c.id];
+    const reco = RECOMMENDATIONS[c.id];
+    if (!reco) return null;
+    const level = reco[Math.min(s, 5)];
+    return { criterion: c, score: s, level };
+  }).filter(Boolean);
+
+  // Trier : problèmes critiques d'abord, puis par score croissant
+  items.sort((a, b) => a.score - b.score);
+
+  recoList.innerHTML = items.map(({ criterion, score, level }) => {
+    const cls = score <= 1 ? 'reco-critical' : score <= 2 ? 'reco-warning' : score <= 3 ? 'reco-improve' : 'reco-good';
+    const icon = score <= 1 ? '🔴' : score <= 2 ? '🟡' : score <= 3 ? '🔵' : '✅';
+    return `
+      <div class="reco-item ${cls}">
+        <div class="reco-header">
+          <span class="reco-icon">${icon}</span>
+          <div>
+            <div class="reco-criterion">${criterion.title} — ${score}/5</div>
+            <div class="reco-title">${level.title}</div>
+          </div>
+        </div>
+        <div class="reco-body">${level.body}</div>
+      </div>`;
+  }).join('');
+}
+
+function exportReport() {
+  const name = document.getElementById('resultTitle').textContent || 'Unnamed skill';
+  const total = Object.values(scores).reduce((a, b) => a + b, 0);
+  const date = new Date().toLocaleDateString('en-GB');
+  let md = `# Skill Evaluation — ${name}\nDate: ${date} | Score: ${total}/35\n\n---\n\n`;
+  CRITERIA.forEach((c, i) => {
+    const s = scores[c.id];
+    const auto = autoScores[c.id] !== undefined ? ` (auto: ${autoScores[c.id]})` : '';
+    md += `## ${i + 1}. ${c.title} — ${s}/5${auto}\n`;
+    // Signals
+    const sigs = document.querySelectorAll(`#signals-${c.id} .signal`);
+    sigs.forEach(s => { md += `- ${s.textContent.trim()}\n`; });
+    md += '\n';
+  });
+  const verdict = total >= 36 ? 'Strong skill' : total >= 23 ? 'Needs iteration' : 'Not production-ready';
+  md += `---\n**Verdict:** ${verdict} (${total}/35)\n`;
+  const area = document.getElementById('exportArea');
+  area.style.display = 'block'; area.textContent = md;
+  navigator.clipboard.writeText(md).catch(() => {});
+}
+
+function resetAll() {
+  skillContent = '';
+  document.getElementById('pasteArea').value = '';
+  document.getElementById('filename').textContent = '';
+  document.getElementById('dropZone').classList.remove('has-file');
+  document.getElementById('analyzeBtn').disabled = true;
+  document.getElementById('statsBar').style.display = 'none';
+  document.getElementById('exportArea').style.display = 'none';
+  document.getElementById('resultTitle').textContent = '—';
+  CRITERIA.forEach(c => {
+    scores[c.id] = 0; autoScores[c.id] = undefined; notes[c.id] = '';
+    const slider = document.getElementById(`slider-${c.id}`);
+    if (slider) slider.value = 0;
+    const badge = document.getElementById(`badge-${c.id}`);
+    if (badge) { badge.textContent = '0'; badge.className = 'score-badge s0'; }
+    const sigEl = document.getElementById(`signals-${c.id}`);
+    if (sigEl) sigEl.innerHTML = '';
+    const titleEl = document.querySelector(`#card-${c.id} .criterion-title`);
+    const tag = titleEl && titleEl.querySelector('.auto-tag');
+    if (tag) tag.remove();
+  });
+  updateResults();
+}
+
+init();
+</script>
+</body>
+</html>
