@@ -4,9 +4,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A single-file, client-side web app (`skill-evaluator.html`) that scores a
+A single-file, client-side web app (`index.html`) that scores a
 `SKILL.md` file (a Claude Code skill definition) against a fixed set of quality
-criteria. The user imports/pastes skill content; the app runs regex-based
+criteria. The app is the single file `index.html` (served at the site root by
+Vercel). The user imports/pastes skill content; the app runs regex-based
 heuristics to auto-score each criterion 0–5, lets the user manually override via
 sliders, then renders a radar chart, verdict, weaknesses, and prescriptive
 recommendations. It is UserAdgents (UA) branded.
@@ -14,7 +15,7 @@ recommendations. It is UserAdgents (UA) branded.
 ## Running / building / testing
 
 There is **no build, package manager, lint, or test setup**. The entire app is
-one HTML file with inline CSS and JS. To run it, open `skill-evaluator.html` in
+one HTML file with inline CSS and JS. To run it, open `index.html` in
 a browser (or serve the directory, e.g. `python3 -m http.server`). External
 runtime dependencies are loaded from CDNs: **Chart.js** (cdnjs) for the radar
 chart and the **Inter** font (Google Fonts) — so a network connection is needed
@@ -22,7 +23,7 @@ for full rendering.
 
 ## Architecture
 
-Everything lives in `skill-evaluator.html`. Two data structures drive the whole
+Everything lives in `index.html`. Two data structures drive the whole
 app; almost all meaningful changes happen by editing them:
 
 - **`CRITERIA`** (array of ~9 objects) — the source of truth. Each entry has

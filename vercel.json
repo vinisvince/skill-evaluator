@@ -1,5 +1,5 @@
 {
-  "rewrites": [
-    { "source": "/", "destination": "/skill-evaluator.html" }
+  "redirects": [
+    { "source": "/skill-evaluator.html", "destination": "/", "permanent": false }
   ]
 }
