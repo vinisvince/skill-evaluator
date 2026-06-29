@@ -1,5 +1,0 @@
-{
-  "redirects": [
-    { "source": "/skill-evaluator.html", "destination": "/", "permanent": false }
-  ]
-}
