@@ -108,6 +108,20 @@
     margin-top: 6px;
   }
 
+  /* ── PROFILE TOGGLE ── */
+  .profile-toggle { display: flex; gap: 8px; margin-bottom: 28px; }
+  .profile-opt {
+    flex: 1; text-align: left; background: var(--surface);
+    border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 14px 16px; cursor: pointer; font-family: inherit;
+    display: flex; flex-direction: column; gap: 3px;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .profile-opt:hover { border-color: #aaa; }
+  .profile-opt.active { border-color: var(--ua-orange); background: var(--ua-orange-dim); }
+  .profile-opt-title { font-size: 14px; font-weight: 700; color: var(--text); }
+  .profile-opt-desc { font-size: 11px; color: var(--muted); line-height: 1.4; }
+
   /* ── IMPORT ZONE ── */
   .import-zone {
     border: 1px dashed #ccc;
@@ -370,7 +384,19 @@
 <div class="container">
   <div class="page-title">
     <h1>Evaluate a skill.</h1>
-    <p>Import a SKILL.md — automatic analysis + manual override &nbsp;·&nbsp; 9 criteria &nbsp;·&nbsp; 45 pts max</p>
+    <p>Import a SKILL.md — automatic analysis + manual override &nbsp;·&nbsp; <span id="profileSummary">9 criteria &nbsp;·&nbsp; 45 pts max</span></p>
+  </div>
+
+  <!-- PROFILE -->
+  <div class="profile-toggle" id="profileToggle">
+    <button class="profile-opt active" data-profile="dev" onclick="setProfile('dev')">
+      <span class="profile-opt-title">💻 Skill de développement</span>
+      <span class="profile-opt-desc">APIs &amp; outils MCP, gestion d'erreurs, sécurité, code</span>
+    </button>
+    <button class="profile-opt" data-profile="design" onclick="setProfile('design')">
+      <span class="profile-opt-title">🎨 Skill design</span>
+      <span class="profile-opt-desc">Design system &amp; tokens, accessibilité, responsive</span>
+    </button>
   </div>
 
   <!-- IMPORT -->
@@ -441,7 +467,7 @@
 </div>
 
 <script>
-const CRITERIA = [
+const ALL_CRITERIA = [
   {
     id: "expertise",
     title: "Grounded in real expertise",
@@ -750,8 +776,79 @@ const CRITERIA = [
       const score = Math.min(5, [hasGotchas, hasChecklist, hasTemplate, hasValidation, hasPlanExecute, codeBlocks >= 1].filter(Boolean).length);
       return { score, signals };
     }
+  },
+  {
+    id: "designSystem",
+    title: "Design system fidelity",
+    desc: "S'appuie sur le design system réel : tokens, composants nommés, échelle d'espacement, palette, typographie, références Figma/Canva/Storybook — pas des valeurs arbitraires.",
+    low: "Valeurs arbitraires, pas de système",
+    high: "Tokens, composants & références ancrés",
+    analyze: (text) => {
+      const signals = [];
+      const hasTokens = /\b(design ?tokens?|--[\w-]+|var\(--|css variable|spacing scale|type scale)\b/i.test(text);
+      const hasComponents = /\b(component|composant|variant|atom|molecule|design system|button|modal|card|input field)\b/i.test(text);
+      const hasRefs = /\b(figma|figma\.com|canva|frame|artboard|auto.?layout|storybook)\b/i.test(text);
+      const hasScale = /\b(spacing|padding|margin|grid|baseline|8px|4px|\d+\s?rem|gap)\b/i.test(text);
+      const hasBrand = /\b(brand|charte|guideline|style ?guide|palette|typograph|font.?family)\b/i.test(text);
+      const arbitraryColors = (text.match(/#[0-9a-f]{3,6}\b/gi) || []).length;
+
+      if (hasTokens) signals.push({ label: 'Design tokens / variables référencés', type: 'found' });
+      else signals.push({ label: 'Aucun design token référencé', type: 'missing' });
+      if (hasComponents) signals.push({ label: 'Composants nommés', type: 'found' });
+      else signals.push({ label: 'Aucun composant nommé', type: 'warn' });
+      if (hasRefs) signals.push({ label: 'Références Figma / Canva / Storybook', type: 'found' });
+      if (hasScale) signals.push({ label: "Échelle d'espacement / grille", type: 'found' });
+      if (hasBrand) signals.push({ label: 'Charte / palette / typographie', type: 'found' });
+      if (arbitraryColors > 4) signals.push({ label: `${arbitraryColors} couleurs en dur — préférez des tokens`, type: 'warn' });
+
+      const score = Math.min(5, [hasTokens, hasComponents, hasRefs, hasScale, hasBrand].filter(Boolean).length);
+      return { score, signals };
+    }
+  },
+  {
+    id: "accessibility",
+    title: "Accessibility & responsive",
+    desc: "Couvre l'accessibilité (contraste, ARIA, navigation clavier, lecteurs d'écran) et le responsive (breakpoints, mobile, reduced motion) — pas seulement le rendu desktop par défaut.",
+    low: "Desktop happy-path uniquement",
+    high: "A11y & responsive explicitement traités",
+    analyze: (text) => {
+      const signals = [];
+      const hasContrast = /\b(contrast(e|ratio)?|wcag|aa|aaa|a11y|accessib|lisibilit)\b/i.test(text);
+      const hasAria = /\b(aria|role=|alt text|alt=|screen reader|lecteur d.?écran|semantic|sémantique|landmark)\b/i.test(text);
+      const hasKeyboard = /\b(keyboard|clavier|focus|tab order|focus.?visible|tabindex)\b/i.test(text);
+      const hasResponsive = /\b(responsive|breakpoint|mobile|viewport|media query|adaptive|fluid|tablet)\b/i.test(text);
+      const hasMotion = /\b(reduced motion|prefers-reduced|animation|transition|motion)\b/i.test(text);
+
+      if (hasContrast) signals.push({ label: 'Contraste / WCAG abordés', type: 'found' });
+      else signals.push({ label: 'Pas de garde sur le contraste', type: 'missing' });
+      if (hasAria) signals.push({ label: 'ARIA / alt / sémantique', type: 'found' });
+      else signals.push({ label: 'Pas de sémantique / ARIA', type: 'warn' });
+      if (hasKeyboard) signals.push({ label: 'Navigation clavier / focus', type: 'found' });
+      if (hasResponsive) signals.push({ label: 'Responsive / breakpoints', type: 'found' });
+      else signals.push({ label: 'Responsive non traité', type: 'missing' });
+      if (hasMotion) signals.push({ label: 'Animations / reduced motion', type: 'found' });
+
+      const score = Math.min(5, [hasContrast, hasAria, hasKeyboard, hasResponsive, hasMotion].filter(Boolean).length);
+      return { score, signals };
+    }
   }
 ];
+
+// ── PROFILES ──
+// 7 critères communs + 2 critères spécifiques au domaine.
+const PROFILES = {
+  dev: {
+    label: 'Développement',
+    ids: ['expertise', 'tested', 'context', 'scope', 'control', 'procedures', 'external', 'security', 'structure']
+  },
+  design: {
+    label: 'Design',
+    ids: ['expertise', 'tested', 'context', 'scope', 'control', 'procedures', 'designSystem', 'accessibility', 'structure']
+  }
+};
+let activeProfile = 'dev';
+let CRITERIA = PROFILES[activeProfile].ids.map(id => ALL_CRITERIA.find(c => c.id === id));
+let MAX_SCORE = CRITERIA.length * 5;
 
 const RECOMMENDATIONS = {
   expertise: {
@@ -825,6 +922,22 @@ const RECOMMENDATIONS = {
     3: { title: "Compléter avec un template d'output", body: "La structure est correcte. Si la skill produit un livrable formaté (rapport, ticket, document), ajoutez un template concret — l'agent s'y conformera bien plus fidèlement qu'à une description en prose." },
     4: { title: "Bonne structure", body: "La skill est bien structurée avec les patterns appropriés. Vérifiez que les checklists et boucles de validation couvrent aussi les chemins d'erreur, pas seulement le happy path." },
     5: { title: "Structure exemplaire ✓", body: "Tous les patterns structurels pertinents sont en place. Maintenez la cohérence lors des ajouts futurs en suivant les mêmes conventions." }
+  },
+  designSystem: {
+    0: { title: "Ancrer la skill dans le design system", body: "Aucune référence au design system détectée. La skill produira des valeurs arbitraires. Référencez explicitement les design tokens (couleurs, espacements, typographie), les noms de composants réels et, si possible, un lien vers le fichier Figma ou le Storybook source de vérité." },
+    1: { title: "Référencer tokens et composants", body: "La skill manque d'ancrage dans le système visuel. Remplacez les valeurs en dur (couleurs hex, pixels arbitraires) par des références à des tokens (`--color-primary`, `spacing-4`). Nommez les composants existants plutôt que de les décrire en prose." },
+    2: { title: "Compléter les références visuelles", body: "Quelques éléments du design system sont présents mais incomplets. Ajoutez l'échelle d'espacement utilisée, la palette de couleurs nommée, l'échelle typographique, et un pointeur vers la source de vérité (Figma, Canva, Storybook)." },
+    3: { title: "Renforcer la fidélité au système", body: "La skill s'appuie correctement sur le design system. Pour progresser, expliquez comment résoudre les cas où un besoin n'a pas de token existant (créer un nouveau token vs. réutiliser le plus proche) et liez chaque composant à sa définition Figma." },
+    4: { title: "Bonne fidélité au design system", body: "Tokens, composants et références sont bien présents. Vérifiez que les noms cités restent synchronisés avec le design system à chaque évolution (renommage de tokens, dépréciation de composants)." },
+    5: { title: "Design system parfaitement respecté ✓", body: "La skill est solidement ancrée dans le système : tokens, composants et sources de vérité. Planifiez une revue à chaque mise à jour majeure du design system." }
+  },
+  accessibility: {
+    0: { title: "Intégrer l'accessibilité et le responsive", body: "Aucune prise en compte de l'a11y ou du responsive détectée. La skill ne couvre que le happy-path desktop. Ajoutez des règles explicites : ratio de contraste minimum (WCAG AA), sémantique/ARIA, navigation clavier, et comportement aux différents breakpoints." },
+    1: { title: "Ajouter les garde-fous a11y de base", body: "Les bases de l'accessibilité manquent. Priorité : exigez un contraste conforme (WCAG AA = 4.5:1), des alternatives textuelles pour les visuels, et un focus clavier visible. Précisez aussi le comportement mobile." },
+    2: { title: "Compléter a11y et responsive", body: "Quelques éléments sont présents mais partiels. Couvrez les trois axes : contraste/lisibilité, sémantique (ARIA, landmarks, alt), et responsive (breakpoints, mobile-first). Mentionnez `prefers-reduced-motion` si la skill produit des animations." },
+    3: { title: "Affiner la couverture", body: "L'accessibilité et le responsive sont abordés. Pour progresser, détaillez l'ordre de tabulation, les états de focus, et testez explicitement les breakpoints clés (mobile, tablette, desktop) plutôt que de supposer un rendu fluide." },
+    4: { title: "Bonne couverture a11y / responsive", body: "Les principaux critères sont traités. Vérifiez que les cas limites sont couverts : zoom 200%, lecteurs d'écran, mode sombre, et réduction des animations." },
+    5: { title: "Accessibilité & responsive exemplaires ✓", body: "La skill traite explicitement l'a11y et le responsive. Maintenez cette rigueur et revalidez la conformité WCAG lors des changements de design majeurs." }
   }
 };
 
@@ -837,8 +950,11 @@ let llmScores = {};
 let llmJustif = {};
 const CLAUDE_MODEL = 'claude-opus-4-8';
 
-function init() {
+// Rebuilds the criterion cards + chart for the active profile. Resets all scores.
+function buildCriteria() {
+  scores = {}; autoScores = {}; notes = {}; llmScores = {}; llmJustif = {};
   const container = document.getElementById('criteria');
+  container.innerHTML = '';
   CRITERIA.forEach((c, i) => {
     scores[c.id] = 0;
     notes[c.id] = '';
@@ -846,7 +962,7 @@ function init() {
       <div class="criterion" id="card-${c.id}">
         <div class="criterion-header">
           <div class="criterion-meta">
-            <div class="criterion-number">Criterion ${i + 1} / 7</div>
+            <div class="criterion-number">Criterion ${i + 1} / ${CRITERIA.length}</div>
             <div class="criterion-title">${c.title}</div>
           </div>
           <div class="score-badge s0" id="badge-${c.id}">0</div>
@@ -868,8 +984,37 @@ function init() {
         </div>
       </div>`;
   });
+  if (chart) { chart.destroy(); chart = null; }
   initChart();
   updateResults();
+}
+
+function updateDenominators() {
+  const summary = document.getElementById('profileSummary');
+  if (summary) summary.innerHTML = `${CRITERIA.length} criteria &nbsp;·&nbsp; ${MAX_SCORE} pts max`;
+  const lbl = document.querySelector('.global-score .label');
+  if (lbl) lbl.textContent = '/ ' + MAX_SCORE;
+}
+
+// Switch evaluation profile (dev vs design). Rebuilds criteria and re-analyzes if content is loaded.
+function setProfile(p) {
+  if (!PROFILES[p] || p === activeProfile) return;
+  activeProfile = p;
+  CRITERIA = PROFILES[p].ids.map(id => ALL_CRITERIA.find(c => c.id === id));
+  MAX_SCORE = CRITERIA.length * 5;
+  document.querySelectorAll('.profile-opt').forEach(b =>
+    b.classList.toggle('active', b.dataset.profile === p));
+  updateDenominators();
+  buildCriteria();
+  document.getElementById('exportArea').style.display = 'none';
+  document.getElementById('claudeStatus').textContent = '';
+  const ct = document.getElementById('claudeTotal'); if (ct) ct.style.display = 'none';
+  if (skillContent.trim()) analyze();
+}
+
+function init() {
+  buildCriteria();
+  updateDenominators();
 
   // Restore saved API key
   document.getElementById('apiKey').value = localStorage.getItem('ua_anthropic_key') || '';
@@ -985,18 +1130,20 @@ function manualScore(id, val) {
 
 function updateResults() {
   const total = Object.values(scores).reduce((a, b) => a + b, 0);
+  const greenThreshold = Math.round(MAX_SCORE * 0.8);
+  const yellowThreshold = Math.round(MAX_SCORE * 0.5);
   const el = document.getElementById('globalScore');
   el.textContent = total;
-  el.className = 'number ' + (total >= 36 ? 'score-green' : total >= 23 ? 'score-yellow' : 'score-red');
+  el.className = 'number ' + (total >= greenThreshold ? 'score-green' : total >= yellowThreshold ? 'score-yellow' : 'score-red');
 
   if (chart) { chart.data.datasets[0].data = CRITERIA.map(c => scores[c.id]); chart.update(); }
 
   const verdictEl = document.getElementById('verdict');
   verdictEl.style.display = 'block';
-  if (total >= 36) {
+  if (total >= greenThreshold) {
     verdictEl.className = 'verdict good';
     verdictEl.innerHTML = `<div class="verdict-title">Strong skill</div>Well-grounded, efficient, and production-ready. Minor refinements may still improve specific areas.`;
-  } else if (total >= 23) {
+  } else if (total >= yellowThreshold) {
     verdictEl.className = 'verdict medium';
     verdictEl.innerHTML = `<div class="verdict-title">Needs iteration</div>Solid foundations but gaps that will show up in real execution. Focus on the lowest-scoring criteria first.`;
   } else {
@@ -1135,7 +1282,7 @@ function applyClaudeScores(evals) {
   const total = CRITERIA.reduce((a, c) => a + (llmScores[c.id] || 0), 0);
   const lbl = document.getElementById('claudeTotal');
   lbl.style.display = 'block';
-  lbl.textContent = `Score Claude : ${total} / 45`;
+  lbl.textContent = `Score Claude : ${total} / ${MAX_SCORE}`;
 }
 
 async function evaluateWithClaude() {
@@ -1176,7 +1323,8 @@ async function evaluateWithClaude() {
 
   const prompt =
     `Tu es un évaluateur expert de "skills" pour agents Claude (fichiers SKILL.md).\n` +
-    `Évalue la skill ci-dessous selon les 9 critères, chacun noté de 0 à 5 (entier).\n` +
+    `Cette skill est évaluée en tant que skill de type « ${PROFILES[activeProfile].label} ».\n` +
+    `Évalue la skill ci-dessous selon les ${CRITERIA.length} critères, chacun noté de 0 à 5 (entier).\n` +
     `Donne pour chaque critère une justification d'une à deux phrases EN FRANÇAIS, ancrée dans le contenu réel de la skill (cite des éléments précis plutôt que des généralités).\n\n` +
     `CRITÈRES :\n${rubric}\n\n` +
     `=== DÉBUT SKILL.md ===\n${skillContent}\n=== FIN SKILL.md ===`;
@@ -1224,7 +1372,7 @@ function exportReport() {
   const name = document.getElementById('resultTitle').textContent || 'Unnamed skill';
   const total = Object.values(scores).reduce((a, b) => a + b, 0);
   const date = new Date().toLocaleDateString('en-GB');
-  let md = `# Skill Evaluation — ${name}\nDate: ${date} | Score: ${total}/35\n\n---\n\n`;
+  let md = `# Skill Evaluation — ${name}\nProfile: ${PROFILES[activeProfile].label} | Date: ${date} | Score: ${total}/${MAX_SCORE}\n\n---\n\n`;
   CRITERIA.forEach((c, i) => {
     const s = scores[c.id];
     const auto = autoScores[c.id] !== undefined ? ` (auto: ${autoScores[c.id]})` : '';
@@ -1235,8 +1383,8 @@ function exportReport() {
     if (llmScores[c.id] != null) md += `- Claude: ${llmScores[c.id]}/5 — ${llmJustif[c.id] || ''}\n`;
     md += '\n';
   });
-  const verdict = total >= 36 ? 'Strong skill' : total >= 23 ? 'Needs iteration' : 'Not production-ready';
-  md += `---\n**Verdict:** ${verdict} (${total}/35)\n`;
+  const verdict = total >= Math.round(MAX_SCORE * 0.8) ? 'Strong skill' : total >= Math.round(MAX_SCORE * 0.5) ? 'Needs iteration' : 'Not production-ready';
+  md += `---\n**Verdict:** ${verdict} (${total}/${MAX_SCORE})\n`;
   const area = document.getElementById('exportArea');
   area.style.display = 'block'; area.textContent = md;
   navigator.clipboard.writeText(md).catch(() => {});
